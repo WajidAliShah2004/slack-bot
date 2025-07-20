@@ -1,0 +1,296 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User management
+model User {
+  id            String   @id @default(cuid())
+  azureId       String   @unique
+  email         String   @unique
+  displayName   String?
+  givenName     String?
+  surname       String?
+  jobTitle      String?
+  department    String?
+  officeLocation String?
+  mobilePhone   String?
+  businessPhones String? // JSON string
+  accessToken   String?  // Encrypted
+  lastLoginAt   DateTime?
+  lastLogoutAt  DateTime?
+  isActive      Boolean  @default(true)
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  permissions   UserPermission[]
+  authLogs      AuthLog[]
+  interactions  Interaction[]
+  llmInteractions LLMInteraction[]
+
+  @@map("users")
+}
+
+// User permissions
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // e.g., 'admin', 'moderator', 'user'
+  grantedAt DateTime @default(now())
+  grantedBy String?  // Admin who granted the permission
+  expiresAt DateTime?
+  isActive  Boolean  @default(true)
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("user_permissions")
+}
+
+// Authentication logs
+model AuthLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // 'login', 'logout', 'revoke', 'refresh'
+  ipAddress String?
+  userAgent String?
+  success   Boolean  @default(true)
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("auth_logs")
+}
+
+// Slack interactions
+model Interaction {
+  id        String   @id @default(cuid())
+  type      String   // 'app_mention', 'direct_message', 'slash_command', 'file_shared', 'reaction_added'
+  userId    String?
+  channelId String?
+  message   String?
+  response  String?
+  timestamp DateTime @default(now())
+  metadata  String?  // JSON string
+
+  // Relations
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("interactions")
+}
+
+// LLM interactions
+model LLMInteraction {
+  id             String   @id @default(cuid())
+  prompt         String
+  response       String
+  model          String   // e.g., 'gpt-4', 'gpt-3.5-turbo'
+  context        String?  // e.g., 'summarization', 'translation', 'qa'
+  tokensUsed     Int      @default(0)
+  processingTime Float?   // in milliseconds
+  userId         String?
+  channelId      String?
+  success        Boolean  @default(true)
+  metadata       String?  // JSON string
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("llm_interactions")
+}
+
+// System configuration
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   // JSON string
+  description String?
+  isActive    Boolean  @default(true)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("system_config")
+}
+
+// Scheduled tasks
+model ScheduledTask {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // 'broadcast', 'reminder', 'cleanup'
+  data        String   // JSON string
+  scheduledAt DateTime
+  executedAt  DateTime?
+  status      String   @default("pending") // 'pending', 'executing', 'completed', 'failed'
+  result      String?  // JSON string
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("scheduled_tasks")
+}
+
+// File uploads
+model FileUpload {
+  id          String   @id @default(cuid())
+  slackFileId String   @unique
+  fileName    String
+  fileType    String
+  fileSize    Int
+  uploadedBy  String?
+  channelId   String?
+  processed   Boolean  @default(false)
+  processingResult String? // JSON string
+  createdAt   DateTime @default(now())
+
+  @@map("file_uploads")
+}
+
+// Workspace information
+model Workspace {
+  id          String   @id @default(cuid())
+  slackTeamId String   @unique
+  teamName    String
+  teamDomain  String?
+  botUserId   String?
+  botToken    String?  // Encrypted
+  accessToken String?  // Encrypted
+  isActive    Boolean  @default(true)
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("workspaces")
+}
+
+// Channel information
+model Channel {
+  id          String   @id @default(cuid())
+  slackChannelId String @unique
+  workspaceId String
+  name        String
+  isPrivate   Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  memberCount Int?
+  topic       String?
+  purpose     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("channels")
+}
+
+// Rate limiting
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   // IP address or user ID
+  type      String   // 'ip', 'user', 'global'
+  count     Int      @default(1)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([key, type])
+  @@map("rate_limits")
+}
+
+// Audit logs
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // e.g., 'user_created', 'permission_granted', 'config_updated'
+  userId    String?
+  resource  String   // e.g., 'user', 'permission', 'config'
+  details   String?  // JSON string
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// API keys (for external integrations)
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  key         String   @unique
+  permissions String   // JSON array of permissions
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("api_keys")
+}
+
+// Webhook endpoints
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  secret      String   // For signature verification
+  events      String   // JSON array of event types
+  isActive    Boolean  @default(true)
+  lastTriggeredAt DateTime?
+  failureCount Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("webhook_endpoints")
+}
+
+// Add indexes for better performance
+model Interaction {
+  @@index([userId])
+  @@index([channelId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+model LLMInteraction {
+  @@index([userId])
+  @@index([model])
+  @@index([context])
+  @@index([success])
+  @@index([createdAt])
+}
+
+model AuthLog {
+  @@index([userId])
+  @@index([action])
+  @@index([success])
+  @@index([createdAt])
+}
+
+model ScheduledTask {
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([type])
+}
+
+model RateLimit {
+  @@index([key, type])
+  @@index([resetAt])
+}
+
+model AuditLog {
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+} 
