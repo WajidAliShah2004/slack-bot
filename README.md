@@ -232,24 +232,5 @@ az container create \
 - **Memory Usage**: < 512MB
 - **CPU Usage**: < 10% average
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue in the repository
-- Check the documentation
-- Review the troubleshooting guide
-
----
 
